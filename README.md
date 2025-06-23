@@ -190,3 +190,123 @@ To route production traffic manually, you use the `x-ms-routing-name` query para
 ```
 <a href="<webappname>.azurewebsites.net/?x-ms-routing-name=self">Go back to production app</a>
 ```
+
+### Azure functions
+
+Azure Functions supports _triggers_, which are ways to start execution of your code, and _bindings_, which are ways to simplify coding for input and output data.
+
+When you create a function app in Azure, you must choose a hosting plan for your app:
+
+- Consumption plan
+- Flex Consumption plan
+- Premium plan
+- Dedicated plan
+- Container Apps
+
+The hosting option you choose dictates the following behaviors:
+
+- How your function app is scaled.
+- The resources available to each function app instance.
+- Support for advanced functionality, such as Azure Virtual Network connectivity.
+- Support for Linux containers.
+
+**Function apps**
+
+A function app provides an execution context in Azure in which your functions run. A function app is composed of one or more individual functions that are managed, deployed, and scaled together.
+
+A Functions project directory contains the following files in the project root folder, regardless of language:
+
+- host.json
+  - Contains configuration options that affect all functions in a function app instance
+- local.settings.json
+  - Settings used by local development tools. When deployed, need to be configured in application settings.
+- Other files in the project depend on your language and specific functions.
+
+**Triggers and bindings**
+
+A trigger defines how a function is invoked and a function must have exactly one trigger. Triggers have associated data, which is often provided as the payload of the function.
+
+Binding to a function is a way of declaratively connecting another resource to the function; bindings might be connected as input bindings, output bindings, or both. Data from bindings is provided to the function as parameters.
+
+Testing functions locally:
+
+- For HTTP triggers, you can call the HTTP endpoint on the local computer.
+- Use connection strings that target live Azure services
+  - By adding the appropriate connection string settings in the `Values` array in the local.settings.json file
+- For storage-based triggers, use the local Azurite emulator (ie: (Queue Storage, Blob Storage, and Table Storage))
+- Manually run non-HTTP trigger functions by using special administrator endpoints
+
+For JS/TS triggers and bindings are confiured by updating _function.json_ schema.
+
+The portal provides a UI for adding bindings in the _Integration_ tab. You can also edit the file directly in the portal in the _Code + test_ tab of your function.
+
+For languages that are dynamically typed such as JavaScript, use the `dataType` property in the function.json file. For example, to read the content of an HTTP request in binary format, set `dataType` to `binary`:
+
+```JSON
+{
+    "dataType": "binary",
+    "type": "httpTrigger",
+    "name": "req",
+    "direction": "in"
+}
+```
+
+Other options for dataType are `stream` and `string`.
+
+All triggers and bindings have a direction property in the _function.json_ file:
+
+- For triggers, the direction is always `in`
+- Input and output bindings use `in` and `out`
+- Some bindings support a special direction `inout`. If you use `inout`, only the _Advanced editor_ is available via the _Integrate_ tab in the portal.
+
+**Example**: write a new row to Azure Table storage whenever a new message appears in Azure Queue storage.
+
+Here's a _function.json_ file for this scenario.
+
+```JSON
+{
+  "disabled": false,
+    "bindings": [
+        {
+            "type": "queueTrigger",
+            "direction": "in",
+            "name": "myQueueItem",
+            "queueName": "myqueue-items",
+            "connection":"MyStorageConnectionAppSetting"
+        },
+        {
+          "tableName": "Person",
+          "connection": "MyStorageConnectionAppSetting",
+          "name": "tableBinding",
+          "type": "table",
+          "direction": "out"
+        }
+  ]
+}
+```
+
+**Connect functions to Azure services**
+
+As a security best practice, Azure Functions takes advantage of the application settings functionality of Azure App Service to help you more securely store strings, keys, and other tokens required to connect to other services.
+
+The default configuration provider uses environment variables. These variables are defined in application settings when running in the Azure and in the local settings file when developing locally.
+
+**Configure an identity-based connection**
+
+Some connections in Azure Functions are configured to use an identity instead of a secret. Support depends on the extension using the connection.
+
+In some cases, a connection string might still be required in Functions even though the service to which you're connecting supports identity-based connections.
+
+Identities must have permissions to perform the intended actions. This is typically done by assigning a role in Azure role-based access control, or specifying the identity in an access policy depending on the service to which you're connecting.
+
+**Creating Azure function**
+
+In VS Code, press `Cmd+Shift+P` and search for _Azure Functions: Create New Project...._
+
+To debug run the function locally, open Terminal and press `Fn+F5`.
+
+To test the function, go to the _Azure: Functions_ area. Under _Functions_, expand _Local Project > Functions_. Right-click the _AzureFunctionName_ function and select _Execute Function Now..._
+
+To create the function in Azure, press `Cmd+Shift+P` and search for _Azure Functions: Create Function App in Azure..._
+
+To deploy the function to Azure, press `Cmd+Shift+P` and search for _Azure Functions: Deploy to Function App..._
