@@ -1108,3 +1108,439 @@ static async Task HandleChangesAsync(
     Console.WriteLine("Finished handling changes.");
 }
 ```
+
+### Azure Container Registry
+
+Azure Container Registry (ACR) is a managed registry service based on the open-source Docker Registry 2.0.
+
+Use cases:
+
+- **Scalable orchestration systems** that manage containerized applications across clusters of hosts, including Kubernetes, DC/OS, and Docker Swarm.
+- **Azure services** that support building and running applications at scale, including Azure Kubernetes Service (AKS), App Service, Batch, and Service Fabric.
+
+Use **Azure Container Registry Tasks (ACR Tasks)** to streamline building, testing, pushing, and deploying images in Azure. Configure build tasks to automate your container OS and framework patching pipeline, and build images automatically when your team commits code to source control.
+
+Azure Container Registry (ACR) tasks are a suite of features that:
+
+- Provide cloud-based container image building for platforms like Linux, Windows, and Advanced RISC Machines (Arm).
+- Extend the early parts of an application development cycle to the cloud with on-demand container image builds.
+- Enable automated builds triggered by source code updates, updates to a container's base image, or timers.
+
+Creating a container registry:
+
+```
+az acr create \
+    --resource-group myResourceGroup \
+    --name mycontainerregistry \
+    --sku Basic
+```
+
+Build an image:
+
+```
+az acr build \
+    --image sample/hello-world:v1 \
+    --registry mycontainerregistry \
+    --file Dockerfile .
+```
+
+List the repositories:
+
+```
+az acr repository list \
+    --name myContainerRegistry \
+    --output table
+```
+
+List the tags on the repository:
+
+```
+az acr repository show-tags \
+    --name myContainerRegistry \
+    --repository sample/hello-world \
+    --output table
+```
+
+Run the image:
+
+```
+az acr run \
+    --registry myContainerRegistry \
+    --cmd '$Registry/sample/hello-world:v1' /dev/null
+```
+
+### Azure Container Instances
+
+Azure Container Instances (ACI) is a great solution for any scenario that can operate in isolated containers, including simple applications, task automation, and build jobs.
+
+The top-level resource in Azure Container Instances is the _container group_. A container group is a collection of containers that get scheduled on the same host machine. Containers in a container group share a lifecycle, resources, local network, and storage volumes. It's similar in concept to a _pod_ in Kubernetes.
+
+There are two common ways to deploy a multi-container group: use a Resource Manager template or a YAML file.
+
+**Create and deploy a container**
+
+You create a container by providing a name, a Docker image, and an Azure resource group to the `az container create` command. You expose the container to the Internet by specifying a DNS name label.
+
+```
+DNS_NAME_LABEL=aci-example-$RANDOM
+
+az container create \
+    --resource-group myResourceGroup \
+    --name mycontainer \
+    --image mcr.microsoft.com/azuredocs/aci-helloworld \
+    --os-type Linux \
+    --cpu 1 \
+    --memory 1.5 \
+    --ports 80 \
+    --dns-name-label $DNS_NAME_LABEL \
+    --location myLocation
+```
+
+Verify the container is running:
+
+```
+az container show \
+    --resource-group myResourceGroup \
+    --name mycontainer \
+    --query "{FQDN:ipAddress.fqdn,ProvisioningState:provisioningState}" \
+    --out table
+```
+
+**Container restart policy**
+
+When you create a container group in Azure Container Instances, you can specify one of three restart policy settings:
+
+- `Always`
+  - Containers in the container group are always restarted.
+  - This is the default setting applied when no restart policy is specified at container creation.
+- `Never`
+  - Containers in the container group are never restarted.
+  - The containers run at most once.
+- `OnFailure`
+  - Containers in the container group are restarted only when the process executed in the container fails (when it terminates with a nonzero exit code).
+  - The containers are run at least once.
+
+Specify the `--restart-policy` parameter when you call `az container create`:
+
+```
+az container create \
+    --resource-group myResourceGroup \
+    --name mycontainer \
+    --image mycontainerimage \
+    --restart-policy OnFailure
+```
+
+**Set environment variables in container instances**
+
+If you need to pass secrets as environment variables, Azure Container Instances supports secure values for both Windows and Linux containers.
+
+```
+az container create \
+    --resource-group myResourceGroup \
+    --name mycontainer \
+    --image mcr.microsoft.com/azuredocs/aci-wordcount:latest \
+    --restart-policy OnFailure \
+    --environment-variables 'NumWords'='5' 'MinLength'='8'\
+```
+
+Set a secure environment variable by specifying the `secureValue` property instead of the regular value for the variable's type. The two variables defined in the following YAML demonstrate the two variable types:
+
+```YAML
+apiVersion: 2018-10-01
+location: eastus
+name: securetest
+properties:
+  containers:
+  - name: mycontainer
+    properties:
+      environmentVariables:
+        - name: 'NOTSECRET'
+          value: 'my-exposed-value'
+        - name: 'SECRET'
+          secureValue: 'my-secret-value'
+      image: nginx
+      ports: []
+      resources:
+        requests:
+          cpu: 1.0
+          memoryInGB: 1.5
+  osType: Linux
+  restartPolicy: Always
+tags: null
+type: Microsoft.ContainerInstance/containerGroups
+```
+
+You would run the following command to deploy the container group with YAML:
+
+```Bash
+az container create \
+    --resource-group myResourceGroup \
+    --file secure-env.yaml
+```
+
+**Mount an Azure file share in Azure Container Instances**
+
+By default, Azure Container Instances are stateless. If the container crashes or stops, all of its state is lost. To persist state beyond the lifetime of the container, you must mount a volume from an external store.
+
+To mount an Azure file share as a volume in a container by using the Azure CLI, specify the share and volume mount point when you create the container with `az container create`:
+
+```
+az container create \
+    --resource-group $ACI_PERS_RESOURCE_GROUP \
+    --name hellofiles \
+    --image mcr.microsoft.com/azuredocs/aci-hellofiles \
+    --dns-name-label aci-demo \
+    --ports 80 \
+    --azure-file-volume-account-name $ACI_PERS_STORAGE_ACCOUNT_NAME \
+    --azure-file-volume-account-key $STORAGE_KEY \
+    --azure-file-volume-share-name $ACI_PERS_SHARE_NAME \
+    --azure-file-volume-mount-path /aci/logs/
+```
+
+You can also deploy a container group and mount a volume in a container with the Azure CLI and a YAML template. Deploying by YAML template is the preferred method when deploying container groups consisting of multiple containers.
+
+```YAML
+apiVersion: '2019-12-01'
+location: eastus
+name: file-share-demo
+properties:
+  containers:
+  - name: hellofiles
+    properties:
+      environmentVariables: []
+      image: mcr.microsoft.com/azuredocs/aci-hellofiles
+      ports:
+      - port: 80
+      resources:
+        requests:
+          cpu: 1.0
+          memoryInGB: 1.5
+      volumeMounts:
+      - mountPath: /aci/logs/
+        name: filesharevolume
+  osType: Linux
+  restartPolicy: Always
+  ipAddress:
+    type: Public
+    ports:
+      - port: 80
+    dnsNameLabel: aci-demo
+  volumes:
+  - name: filesharevolume
+    azureFile:
+      sharename: acishare
+      storageAccountName: <Storage account name>
+      storageAccountKey: <Storage account key>
+tags: {}
+type: Microsoft.ContainerInstance/containerGroups
+```
+
+To mount multiple volumes in a container instance, you must deploy using an Azure Resource Manager template or a YAML file. To use a template or YAML file, provide the share details and define the volumes by populating the `volumes` array in the `properties` section of the template.
+
+```JSON
+"volumes": [{
+  "name": "myvolume1",
+  "azureFile": {
+    "shareName": "share1",
+    "storageAccountName": "myStorageAccount",
+    "storageAccountKey": "<storage-account-key>"
+  }
+},
+{
+  "name": "myvolume2",
+  "azureFile": {
+    "shareName": "share2",
+    "storageAccountName": "myStorageAccount",
+    "storageAccountKey": "<storage-account-key>"
+  }
+}]
+```
+
+Next, for each container in the container group in which you'd like to mount the volumes, populate the volumeMounts array in the properties section of the container definition.
+
+```JSON
+"volumeMounts": [{
+  "name": "myvolume1",
+  "mountPath": "/mnt/share1/"
+},
+{
+  "name": "myvolume2",
+  "mountPath": "/mnt/share2/"
+}]
+```
+
+### Azure Container Apps
+
+Azure Container Apps enables you to run microservices and containerized applications on a serverless platform that runs on top of Azure Kubernetes Service. Common uses of Azure Container Apps include:
+
+- Deploying API endpoints
+- Hosting background processing applications
+- Handling event-driven processing
+- Running microservices
+
+Applications built on Azure Container Apps can dynamically scale based on: HTTP traffic, event-driven processing, CPU or memory load, and any KEDA-supported scaler.
+
+Ensuring you have the latest version of the Azury Container Apps extension for the CLI:
+
+```
+az extension add --name containerapp --upgrade
+```
+
+There are two namespaces (used to group and manage resource providers) that need to be registered for Azure Container Apps, so ensure they are registered:
+
+```
+az provider register --namespace Microsoft.App
+az provider register --namespace Microsoft.OperationalInsights
+```
+
+An environment in Azure Container Apps creates a secure boundary around a group of container apps. Container Apps deployed to the same environment are deployed in the same virtual network and write logs to the same Log Analytics workspace.
+
+Create an Azure Container Apps environment:
+
+```
+az containerapp env create \
+    --name my-container-env \
+    --resource-group myResourceGroup \
+    --location myLocation
+```
+
+Deploy an app container image:
+
+```
+az containerapp create \
+    --name my-container-app \
+    --resource-group myResourceGroup \
+    --environment my-container-env \
+    --image mcr.microsoft.com/azuredocs/containerapps-helloworld:latest \
+    --target-port 80 \
+    --ingress 'external' \
+    --query properties.configuration.ingress.fqdn
+```
+
+By setting `--ingress` to `external`, you make the container app available to public requests.
+
+**Containers in Azure Container Apps**
+
+Here is an example of the containers array in the properties.template section of a container app resource template:
+
+```JSON
+"containers": [
+  {
+    "name": "main",
+    "image": "[parameters('container_image')]",
+    "env": [
+      {
+        "name": "HTTP_PORT",
+        "value": "80"
+      },
+      {
+        "name": "SECRET_VAL",
+        "secretRef": "mysecret"
+      }
+    ],
+    "resources": {
+      "cpu": 0.5,
+      "memory": "1Gi"
+    },
+    "volumeMounts": [
+      {
+        "mountPath": "/myfiles",
+        "volumeName": "azure-files-volume"
+      }
+    ]
+    "probes": [
+        {
+          "type": "liveness",
+          "httpGet": {
+            "path": "/health",
+            "port": 8080,
+            "httpHeaders": [
+              {
+                "name": "Custom-Header",
+                "value": "liveness probe"
+              }]
+          },
+          "initialDelaySeconds": 7,
+          "periodSeconds": 3
+// file is truncated for brevity
+```
+
+You can deploy images hosted on private registries by providing credentials in the Container Apps configuration.
+
+To use a container registry, you define the required fields in registries array in the properties.configuration section of the container app resource template. The passwordSecretRef field identifies the name of the secret in the secrets array name where you defined the password.
+
+```JSON
+{
+  ...
+  "registries": [{
+    "server": "docker.io",
+    "username": "my-registry-user-name",
+    "passwordSecretRef": "my-password-secret-name"
+  }]
+}
+```
+
+**Authentication and authorization in Azure Container Apps**
+
+Azure Container Apps provides built-in authentication and authorization features to secure your external ingress-enabled container app with minimal or no code.
+
+The authentication and authorization middleware component is a feature of the platform that runs as a sidecar container on each replica in your application. When enabled, every incoming HTTP request passes through the security layer before being handled by your application.
+
+The platform middleware handles several things for your app:
+
+- Authenticates users and clients with the specified identity providers
+  - Microsoft Identity Platform (/.auth/login/aad)
+  - Facebook (/.auth/login/facebook)
+  - GitHub (/.auth/login/github)
+  - Google (/.auth/login/google)
+  - X (/.auth/login/twitter)
+  - Any OpenID Connect provider (/.auth/login/<providerName>)
+- Manages the authenticated session
+- Injects identity information into HTTP request headers
+
+**Manage revisions and secrets in Azure Container Apps**
+
+Azure Container Apps implements container app versioning by creating revisions. A revision is an immutable snapshot of a container app version. You can use revisions to release a new version of your app, or quickly revert to an earlier version of your app.
+
+With the az containerapp update command you can modify environment variables, compute resources, scale parameters, and deploy a different image. If your container app update includes revision-scope changes, a new revision is generated.
+
+```
+az containerapp update \
+  --name <APPLICATION_NAME> \
+  --resource-group <RESOURCE_GROUP_NAME> \
+  --image <IMAGE_NAME>
+```
+
+You can list all revisions associated with your container app:
+
+```
+az containerapp revision list \
+  --name <APPLICATION_NAME> \
+  --resource-group <RESOURCE_GROUP_NAME> \
+  -o table
+```
+
+Container Apps doesn't support Azure Key Vault integration. Instead, enable managed identity in the container app and use the Key Vault SDK in your app to access secrets.
+
+When you create a container app, secrets are defined using the --secrets parameter.
+
+```
+az containerapp create \
+  --resource-group "my-resource-group" \
+  --name queuereader \
+  --environment "my-environment-name" \
+  --image demos/queuereader:v1 \
+  --secrets "queue-connection-string=$CONNECTION_STRING"
+```
+
+To reference a secret in an environment variable in the Azure CLI, set its value to `secretref:`, followed by the name of the secret.
+
+```
+az containerapp create \
+  --resource-group "my-resource-group" \
+  --name myQueueApp \
+  --environment "my-environment-name" \
+  --image demos/myQueueApp:v1 \
+  --secrets "queue-connection-string=$CONNECTIONSTRING" \
+  --env-vars "QueueName=myqueue" "ConnectionString=secretref:queue-connection-string"
+```
