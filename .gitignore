@@ -1,0 +1,90 @@
+## Build results
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+*.log
+
+## User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## Mono Auto Generated Files
+mono_crash.*
+
+## Visual Studio files
+.vscode/
+.vs/
+*.vc.db
+*.VC.db
+*.pdb
+*.cache
+
+## Rider (JetBrains)
+.idea/
+*.sln.iml
+
+## NuGet
+*.nupkg
+*.snupkg
+packages/
+*.nuspec
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Avoid committing secrets
+*.env
+*.secrets.json
+secrets.json
+
+## ASP.NET Scaffolding
+ScaffoldingReadMe.txt
+
+## Entity Framework
+*.dbmdl
+Migrations/
+
+## Test results
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+*.codecoverage
+
+## DotCover
+*.dotCover
+
+## Build Logs
+msbuild.log
+msbuild.err
+msbuild.wrn
+
+## Local config
+appsettings.Development.json
+
+## Resharper
+_ReSharper*/
+*.ReSharper
+*.DotSettings.user
+
+## Windows image file caches
+Thumbs.db
+ehthumbs.db
+
+## macOS
+.DS_Store
+
+## Linux
+*~
+
+## Other
+*.tmp
+*.bak
+*.swp
+*.swo
+
+# Optional: If using Git LFS
+# *.psd
+# *.zip

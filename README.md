@@ -1544,3 +1544,361 @@ az containerapp create \
   --secrets "queue-connection-string=$CONNECTIONSTRING" \
   --env-vars "QueueName=myqueue" "ConnectionString=secretref:queue-connection-string"
 ```
+
+### Microsoft identity platform
+
+The Microsoft identity platform helps you build applications your users and customers can sign in to using their Microsoft identities or social accounts, and provide authorized access to your own APIs or Microsoft APIs like Microsoft Graph.
+
+There are several components that make up the Microsoft identity platform:
+
+- OAuth 2.0 and OpenID Connect standard-compliant authentication service
+- Open-source libraries
+  - Microsoft Authentication Libraries (MSAL)
+- Microsoft identity platform endpoint
+- Application management portal
+- Application configuration API and PowerShell
+
+For developers, the Microsoft identity platform offers integration of modern innovations in the identity and security space like passwordless authentication, step-up authentication, and Conditional Access.
+
+**Service principals**
+
+To delegate Identity and Access Management functions to Microsoft Entra ID, an application must be registered with a Microsoft Entra tenant.
+
+When you register an app in the Azure portal, you choose whether it is:
+
+- Single tenant: only accessible in your tenant
+- Multi-tenant: accessible in other tenants
+
+**Application object**
+
+A Microsoft Entra application is scoped to its one and only application object. The application object resides in the Microsoft Entra tenant where the application was registered (known as the application's "home" tenant). An application object is used as a template or blueprint to create one or more service principal objects. A service principal is created in every tenant where the application is used.
+
+The application object describes three aspects of an application:
+
+- How the service can issue tokens in order to access the application.
+- Resources that the application might need to access.
+- The actions that the application can take.
+
+**Service principal object**
+
+To access resources secured by a Microsoft Entra tenant, the entity that is requesting access must be represented by a security principal. This is true for both users (user principal) and applications (service principal).
+
+The security principal defines the access policy and permissions for the user/application in the Microsoft Entra tenant. This enables core features such as authentication of the user/application during sign-in, and authorization during resource access.
+
+There are three types of service principal:
+
+- Application
+
+  - This type of service principal is the local representation, or application instance, of a global application object in a single tenant or directory.
+  - A service principal is created in each tenant where the application is used, and references the globally unique app object.
+  - The service principal object defines what the app can actually do in the specific tenant, who can access the app, and what resources the app can access.
+
+- Managed identity
+
+  - This type of service principal is used to represent a managed identity.
+  - Managed identities provide an identity for applications to use when connecting to resources that support Microsoft Entra authentication.
+  - When a managed identity is enabled, a service principal representing that managed identity is created in your tenant.
+  - Service principals representing managed identities can be granted access and permissions, but can't be updated or modified directly.
+
+- Legacy
+  - This type of service principal represents a legacy app, which is an app created before app registrations were introduced or an app created through legacy experiences.
+  - A legacy service principal can have:
+    - credentials
+    - service principal names
+    - reply URLs
+    - and other properties that an authorized user can edit, but doesn't have an associated app registration.
+
+An application object has:
+
+- A one to one relationship with the software application, and
+- A one to many relationships with its corresponding service principal objects.
+
+A service principal must be created in each tenant where the application is used to establish an identity for sign-in and/or access to resources being secured by the tenant.
+
+**Permissions and consent**
+
+The Microsoft identity platform implements the OAuth 2.0 authorization protocol. Any web-hosted resource that integrates with the Microsoft identity platform has a resource identifier, or _application ID URI_.
+
+In OAuth 2.0, these types of permission sets are called scopes. They're also often referred to as permissions. In the Microsoft identity platform, a permission is represented as a string value.
+
+_Permission types:_
+
+- **Delegated access** are used by apps that have a signed-in user present. For these apps, either the user or an administrator consents to the permissions that the app requests. The app is delegated with the permission to act as a signed-in user when it makes calls to the target resource.
+- **App-only access permissions** are used by apps that run without a signed-in user present, for example, apps that run as background services or daemons. Only an administrator can consent to app-only access permissions.
+
+_Consent types:_
+
+- Static user consent
+  - You must specify all the permissions it needs in the app's configuration in the Azure portal
+- Incremental and dynamic user consent
+  - You can ask for a minimum set of permissions upfront and request more over time as the customer uses more app features.
+- Admin consent
+  - Admin consent ensures that administrators have some other controls before authorizing apps or users to access highly privileged data from the organization.
+
+In an OpenID Connect or OAuth 2.0 authorization request, an app can request the permissions it needs by using the scope query parameter:
+
+```
+GET https://login.microsoftonline.com/common/oauth2/v2.0/authorize?
+client_id=00001111-aaaa-2222-bbbb-3333cccc4444
+&response_type=code
+&redirect_uri=http%3A%2F%2Flocalhost%2Fmyapp%2F
+&response_mode=query
+&scope=
+https%3A%2F%2Fgraph.microsoft.com%2Fcalendars.read%20
+https%3A%2F%2Fgraph.microsoft.com%2Fmail.send
+&state=12345
+```
+
+**Conditional access**
+
+Conditional Access enables developers and enterprise customers to protect services in a multitude of ways including:
+
+- Multifactor authentication
+- Allowing only Intune enrolled devices to access specific services
+- Restricting user locations and IP ranges
+
+### Microsoft Authentication Library
+
+The Microsoft Authentication Library (MSAL) enables developers to acquire security tokens from the Microsoft identity platform to authenticate users and access secured web APIs.
+
+The Microsoft Authentication Library (MSAL) defines two types of clients; public clients and confidential clients:
+
+- Public client applications run on devices, such as desktop, browserless APIs, mobile or client-side browser apps.
+  - They can't be trusted to safely keep application secrets, so they can only access web APIs on behalf of the user.
+- Confidential client applications run on servers, such as web apps, web API apps, or service/daemon apps.
+  - They're considered difficult to access by users or attackers, and therefore can adequately hold configuration-time secrets to assert proof of its identity.
+
+**Client applications**
+
+With MSAL.NET 3.x, the recommended way to instantiate an application is by using the application builders: PublicClientApplicationBuilder and ConfidentialClientApplicationBuilder.
+
+Before initializing an application, you first need to register it so that your app can be integrated with the Microsoft identity platform. After registration, you might need the following information (which can be found in the Azure portal):
+
+- **Application (client) ID** - This is a string representing a GUID.
+- **Directory (tenant) ID** - Provides identity and access management (IAM) capabilities to applications and resources used by your organization. It can specify if you're writing a line of business application solely for your organization (also named single-tenant application).
+- **The identity provider URL** (named the **instance**) and the sign-in audience for your application. These two parameters are collectively known as the authority.
+- **Client credentials** - which can take the form of an application secret (client secret string) or certificate (of type `X509Certificate2`) if it's a confidential client app.
+- For web apps, and sometimes for public client apps (in particular when your app needs to use a broker), you need to set the **Redirect URI** where the identity provider sends the security token back to your application.
+
+**Initializing public and confidential client applications from code**
+
+The following code instantiates a public client application, signing-in users in the Microsoft Azure public cloud.
+
+```C#
+IPublicClientApplication app = PublicClientApplicationBuilder.Create(clientId).Build();
+```
+
+In the same way, the following code instantiates a confidential application (a Web app located at https://myapp.azurewebsites.net) handling tokens from users in the Microsoft Azure public cloud.
+
+```C#
+string redirectUri = "https://myapp.azurewebsites.net";
+IConfidentialClientApplication app = ConfidentialClientApplicationBuilder.Create(clientId)
+    .WithClientSecret(clientSecret)
+    .WithRedirectUri(redirectUri )
+    .Build();
+```
+
+`.With` methods can be applied as modifiers:
+
+- `.WithAuthority()`
+  - Sets the application default authority to a Microsoft Entra authority, with the possibility of choosing the Azure Cloud, the audience, the tenant (tenant ID or domain name), or providing directly the authority URI.
+- `.WithTenantId(string tenantId)`
+  - Overrides the tenant ID, or the tenant description.
+- `.WithClientId(string)`
+  - Overrides the client ID.
+- `.WithRedirectUri(string redirectUri)`
+  - Overrides the default redirect URI. This is useful for scenarios requiring a broker.
+- `.WithComponent(string)`
+  - Sets the name of the library using MSAL.NET (for telemetry reasons).
+- `.WithDebugLoggingCallback()`
+  - If called, the application calls Debug.Write simply enabling debugging traces.
+- `.WithLogging()`
+  - If called, the application calls a callback with debugging traces.
+- `.WithTelemetry(TelemetryCallback telemetryCallback)`
+  - Sets the delegate used to send telemetry.
+
+**Register a new application**
+
+- In the portal, search for and select _App registrations_.
+- Select _+ New registration_
+- For _Redirect URI_ set _Public client/native..._ and value of `http://localhost`
+- In the _Essentials_ section of the _Overview_ page record the _Application (client) ID_ and the _Directory (tenant) ID_.
+
+### Shared access signatures
+
+A shared access signature (SAS) is a signed URI that points to one or more storage resources and includes a token that contains a special set of query parameters. The token indicates how the resources might be accessed by the client.
+
+Azure Storage supports three types of shared access signatures:
+
+- User delegation SAS
+  - A user delegation SAS is secured with Microsoft Entra credentials and also by the permissions specified for the SAS.
+  - A user delegation SAS applies to Blob storage only.
+  - Microsoft recommends that you use Microsoft Entra credentials when possible as a security best practice
+- Service SAS
+  - A service SAS is secured with the storage account key.
+  - A service SAS delegates access to a resource in the following Azure Storage services: Blob storage, Queue storage, Table storage, or Azure Files.
+- Account SAS
+  - An account SAS is secured with the storage account key.
+  - An account SAS delegates access to resources in one or more of the storage services. All of the operations available via a service or user delegation SAS are also available via an account SAS.
+
+**Anatomy of SAS**
+
+In a single URI, such as `https://medicalrecords.blob.core.windows.net/patient-images/patient-116139-nq8z7f.jpg?sp=r&st=2020-01-20T11:42:32Z&se=2020-01-20T19:42:32Z&spr=https&sv=2019-02-02&sr=b&sig=SrW1HZ5Nb6MbRzTbXCaPm%2BJiSEn15tC91Y4umMPwVZs%3D`, you can separate the URI from the SAS token as follows:
+
+- **URI**: `https://medicalrecords.blob.core.windows.net/patient-images/patient-116139-nq8z7f.jpg?`
+- **SAS token**: `sp=r&st=2020-01-20T11:42:32Z&se=2020-01-20T19:42:32Z&spr=https&sv=2019-02-02&sr=b&sig=SrW1HZ5Nb6MbRzTbXCaPm%2BJiSEn15tC91Y4umMPwVZs%3D`
+
+The SAS token itself is made up of several components:
+
+- `sp=r`
+  - Controls the access rights. The values can be `a` for add, `c` for create, `d` for delete, `l` for list, `r` for read, or `w` for write.
+  - This example is read only. The example `sp=acdlrw` grants all the available rights.
+- `st=2020-01-20T11:42:32Z`
+  - The date and time when access starts.
+- `se=2020-01-20T19:42:32Z`
+  - The date and time when access ends. This example grants eight hours of access.
+- `sv=2019-02-02`
+  - The version of the storage API to use.
+- `sr=b`
+  - The kind of storage being accessed. In this example, `b` is for blob.
+- `sig=SrW1HZ5Nb6MbRzTbXCaPm%2BJiSEn15tC91Y4umMPwVZs%3D`
+  - The cryptographic signature.
+
+**Stored access policies**
+
+A stored access policy provides an extra level of control over service-level shared access signatures (SAS) on the server side. Establishing a stored access policy groups SAS and provides more restrictions for signatures that bound by the policy.
+
+The following storage resources support stored access policies:
+
+- Blob containers
+- File shares
+- Queues
+- Tables
+
+The access policy for a SAS consists of the start time, expiry time, and permissions for the signature. The parameters can be specified on the combination of signature URI and on the stored access policy.
+
+Examples of creating a stored access policy by using C# .NET and the Azure CLI:
+
+```C#
+BlobSignedIdentifier identifier = new BlobSignedIdentifier
+{
+    Id = "stored access policy identifier",
+    AccessPolicy = new BlobAccessPolicy
+    {
+        ExpiresOn = DateTimeOffset.UtcNow.AddHours(1),
+        Permissions = "rw"
+    }
+};
+
+blobContainer.SetAccessPolicy(permissions: new BlobSignedIdentifier[] { identifier });
+```
+
+```
+az storage container policy create \
+    --name <stored access policy identifier> \
+    --container-name <container name> \
+    --start <start time UTC datetime> \
+    --expiry <expiry time UTC datetime> \
+    --permissions <(a)dd, (c)reate, (d)elete, (l)ist, (r)ead, or (w)rite> \
+    --account-key <storage account key> \
+    --account-name <storage account name> \
+```
+
+### Microsoft Graph
+
+- _The Microsoft Graph API_ offers a single endpoint, https://graph.microsoft.com. You can use REST APIs or SDKs to access the endpoint. Microsoft Graph also includes services that manage user and device identity, access, compliance, and security.
+- _Microsoft Graph connectors_ work in the incoming direction, delivering data external to the Microsoft cloud into Microsoft Graph services and applications, to enhance Microsoft 365 experiences such as Microsoft Search. Connectors exist for many commonly used data sources such as Box, Google Drive, Jira, and Salesforce.
+- _Microsoft Graph Data Connect_ provides a set of tools to streamline secure and scalable delivery of Microsoft Graph data to popular Azure data stores. The cached data serves as data sources for Azure development tools that you can use to build intelligent applications.
+
+**REST API method**
+
+```
+{HTTP method} https://graph.microsoft.com/{version}/{resource}?{query-parameters}
+```
+
+A resource can be an entity or complex type, commonly defined with properties. Entities differ from complex types by always including an `id` property.
+
+**SDKs**
+
+The Microsoft Graph SDKs are designed to simplify building high-quality, efficient, and resilient applications that access Microsoft Graph. The SDKs include two components: a service library and a core library.
+
+Create a Microsoft Graph client:
+
+```C#
+var scopes = new[] { "User.Read" };
+
+// Multi-tenant apps can use "common",
+// single-tenant apps must use the tenant ID from the Azure portal
+var tenantId = "common";
+
+// Value from app registration
+var clientId = "YOUR_CLIENT_ID";
+
+// using Azure.Identity;
+var options = new TokenCredentialOptions
+{
+    AuthorityHost = AzureAuthorityHosts.AzurePublicCloud
+};
+
+// Callback function that receives the user prompt
+// Prompt contains the generated device code that you must
+// enter during the auth process in the browser
+Func<DeviceCodeInfo, CancellationToken, Task> callback = (code, cancellation) => {
+    Console.WriteLine(code.Message);
+    return Task.FromResult(0);
+};
+
+// /dotnet/api/azure.identity.devicecodecredential
+var deviceCodeCredential = new DeviceCodeCredential(
+    callback, tenantId, clientId, options);
+
+var graphClient = new GraphServiceClient(deviceCodeCredential, scopes);
+```
+
+Read information from Microsoft Graph:
+
+```C#
+// GET https://graph.microsoft.com/v1.0/me
+var user = await graphClient.Me
+    .GetAsync();
+```
+
+Retrieve a list of entities:
+
+- The `$filter` query parameter can be used to reduce the result set to only those rows that match the provided condition.
+- The `$orderBy` query parameter requests that the server provides the list of entities sorted by the specified properties.
+
+```C#
+// GET https://graph.microsoft.com/v1.0/me/messages?
+// $select=subject,sender&$filter=subject eq 'Hello world'
+var messages = await graphClient.Me.Messages
+    .GetAsync(requestConfig =>
+    {
+        requestConfig.QueryParameters.Select =
+            ["subject", "sender"];
+        requestConfig.QueryParameters.Filter =
+            "subject eq 'Hello world'";
+    });
+```
+
+Delete an entity:
+
+```C#
+// DELETE https://graph.microsoft.com/v1.0/me/messages/{message-id}
+// messageId is a string containing the id property of the message
+await graphClient.Me.Messages[messageId]
+    .DeleteAsync();
+```
+
+Create a new entity:
+
+```C#
+// POST https://graph.microsoft.com/v1.0/me/calendars
+var calendar = new Calendar
+{
+    Name = "Volunteer",
+};
+
+var newCalendar = await graphClient.Me.Calendars
+    .PostAsync(calendar);
+```
