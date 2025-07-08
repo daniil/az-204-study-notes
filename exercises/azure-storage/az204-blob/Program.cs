@@ -12,7 +12,7 @@ Console.ReadLine();
 static async Task ProcessAsync()
 {
   // Copy the connection string from the portal in the variable below.
-  string storageConnectionString = "DefaultEndpointsProtocol=https;AccountName=az204storageacctdaniil;AccountKey=jz0KWpTN8CzEw3/hkOkHOyq6RzS557BBK5mNnqiPYqxEQVpJKWKs/V1rSxC4H0x86naxcowVt19j+ASt360bNA==;EndpointSuffix=core.windows.net";
+  string storageConnectionString = "CONNECTION_STRING";
 
   // Create a client that can authenticate with a connection string
   BlobServiceClient blobServiceClient = new BlobServiceClient(storageConnectionString);
