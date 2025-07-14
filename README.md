@@ -1902,3 +1902,292 @@ var calendar = new Calendar
 var newCalendar = await graphClient.Me.Calendars
     .PostAsync(calendar);
 ```
+
+### Azure Key Vault
+
+Azure Key Vault is a tool for securely storing and accessing secrets. A secret is anything that you want to tightly control access to, such as API keys, passwords, or certificates. A vault is logical group of secrets.
+
+The Azure Key Vault service supports two types of containers: vaults and managed hardware security module(HSM) pools. Vaults support storing software and HSM-backed keys, secrets, and certificates. Managed HSM pools only support HSM-backed keys.
+
+Azure Key Vault helps solve the following problems:
+
+- **Secrets Management**: Azure Key Vault can be used to Securely store and tightly control access to tokens, passwords, certificates, API keys, and other secrets
+- **Key Management**: Azure Key Vault can also be used as a Key Management solution. Azure Key Vault makes it easy to create and control the encryption keys used to encrypt your data.
+- **Certificate Management**: Azure Key Vault is also a service that lets you easily provision, manage, and deploy public and private Secure Sockets Layer/Transport Layer Security (SSL/TLS) certificates for use with Azure and your internal connected resources.
+
+**Authentication**
+
+There are three ways to authenticate to Key Vault:
+
+- **Managed identities for Azure resources**
+  - When you deploy an app on a virtual machine in Azure, you can assign an identity to your virtual machine that has access to Key Vault. You can also assign identities to other Azure resources.
+  - The benefit of this approach is that the app or service isn't managing the rotation of the first secret. Azure automatically rotates the service principal client secret associated with the identity.
+  - _We recommend this approach as a best practice._
+- **Service principal and certificate**
+  - You can use a service principal and an associated certificate that has access to Key Vault.
+  - We don't recommend this approach because the application owner or developer must rotate the certificate.
+- **Service principal and secret**
+  - Although you can use a service principal and a secret to authenticate to Key Vault, we don't recommend it. It's hard to automatically rotate the bootstrap secret that's used to authenticate to Key Vault.
+
+Authentication with Key Vault works with Microsoft Entra ID, which is responsible for authenticating the identity of any given security principal. A security principal is anything that can request access to Azure resources. This includes:
+
+- Users – Real people with accounts in Microsoft Entra ID.
+- Groups – Collections of users. Permissions given to the group apply to all its members.
+- Service Principals – Represent apps or services (not people). Think of it like a user account for an app.
+
+**Create an Azure Key Vault resource**
+
+```
+az keyvault create \
+    --name $keyVaultName \
+    --resource-group $resourceGroup \
+    --location $location
+```
+
+To create and retrieve a secret, assign your Microsoft Entra user to the Key Vault Secrets Officer role. This gives your user account permission to set, delete, and list secrets. In a typical scenario you may want to separate the create/read actions by assigning the Key Vault Secrets Officer to one group, and Key Vault Secrets User (can get and list secrets) to another.
+
+**Retrieve `userPrincipalName`**
+
+```
+userPrincipal=$(az rest \
+    --method GET \
+    --url https://graph.microsoft.com/v1.0/me \
+    --headers 'Content-Type=application/json' \
+    --query userPrincipalName --output tsv)
+```
+
+**Retrieve `resourceID`**
+
+```
+resourceID=$(az keyvault show \
+    --resource-group $resourceGroup \
+    --name $keyVaultName \
+    --query id \
+    --output tsv)
+```
+
+**Create and assign the Key Vault Secrets Officer role**
+
+```
+az role assignment create \
+    --assignee $userPrincipal \
+    --role "Key Vault Secrets Officer" \
+    --scope $resourceID
+```
+
+**Create a secret**
+
+```
+az keyvault secret set \
+    --vault-name $keyVaultName \
+    --name "MySecret" \
+    --value "My secret value"
+```
+
+**Retrieve a secret**
+
+```
+az keyvault secret show \
+    --name "MySecret" \
+    --vault-name $keyVaultName
+```
+
+### Managed Identities
+
+A common challenge for developers is the management of secrets, credentials, certificates, and keys used to secure communication between services. Managed identities eliminate the need for developers to manage these credentials. They provide an automatically managed identity in Microsoft Entra ID for applications to use when connecting to resources that support Microsoft Entra authentication.
+
+There are two types of managed identities:
+
+- A **system-assigned managed identity** is enabled directly on an Azure service instance. When the identity is enabled, Azure creates an identity for the instance in the Microsoft Entra tenant trusted by the subscription of the instance. After the identity is created, the credentials are provisioned onto the instance.
+- A user-assigned managed identity is created as a standalone Azure resource. Through a create process, Azure creates an identity in the Microsoft Entra tenant that's trusted by the subscription in use. After the identity is created, the identity can be assigned to one or more Azure service instances.
+
+Following are common use cases for managed identities:
+
+- System-assigned managed identity
+  - Workloads contained within a single Azure resource.
+  - Workloads needing independent identities.
+  - For example, an application that runs on a single virtual machine.
+    -User-assigned managed identity
+  - Workloads that run on multiple resources and can share a single identity.
+  - Workloads needing preauthorization to a secure resource, as part of a provisioning flow.
+  - Workloads where resources are recycled frequently, but permissions should stay consistent.
+  - For example, a workload where multiple virtual machines need to access the same resource.
+
+**System-assigned managed identity**
+
+To create, or enable, an Azure virtual machine with the system-assigned managed identity your account needs the **Virtual Machine Contributor** role assignment. No other Microsoft Entra directory role assignments are required.
+
+```
+az vm create \
+    --resource-group myResourceGroup \
+    --name myVM \
+    --image win2016datacenter \
+    --generate-ssh-keys \
+    --assign-identity \
+    --role contributor \
+    --scope mySubscription \
+    --admin-username azureuser \
+    --admin-password myPassword12
+```
+
+Use the `az vm identity assign` command to assign the system-assigned identity to an existing virtual machine:
+
+```
+az vm identity assign -g myResourceGroup -n myVm
+```
+
+**User-assigned managed identity**
+
+To assign a user-assigned identity to a virtual machine during its creation, your account needs the **Virtual Machine Contributor** and **Managed Identity Operator** role assignments. No other Microsoft Entra directory role assignments are required.
+
+Create a user-assigned identity
+
+```
+az identity create -g myResourceGroup -n myUserAssignedIdentity
+```
+
+Assign a user-assigned managed identity during the creation of an Azure resource
+
+```
+az vm create \
+    --resource-group <RESOURCE GROUP> \
+    --name <VM NAME> \
+    --image Ubuntu2204 \
+    --admin-username <USER NAME> \
+    --admin-password <PASSWORD> \
+    --assign-identity <USER ASSIGNED IDENTITY NAME> \
+    --role <ROLE> \
+    --scope <SUBSCRIPTION>
+```
+
+Assign the user-assigned identity to your virtual machine using `az vm identity` assign.
+
+```
+az vm identity assign \
+    -g <RESOURCE GROUP> \
+    -n <VM NAME> \
+    --identities <USER ASSIGNED IDENTITY>
+```
+
+### Azure App Configuration
+
+Azure App Configuration provides a service to centrally manage application settings and feature flags.
+
+Azure App Configuration stores configuration data as key-value pairs. It's a common practice to organize keys into a hierarchical namespace by using a character delimiter, such as `/` or `:`. Keys stored in App Configuration are case-sensitive, unicode-based strings.
+
+Key-values in App Configuration can optionally have a label attribute. By default, use `\0`.
+
+```
+Key = AppName:DbEndpoint & Label = Test
+Key = AppName:DbEndpoint & Label = Staging
+Key = AppName:DbEndpoint & Label = Production
+```
+
+App Configuration doesn't version key values automatically as they're modified. Use labels as a way to create multiple versions of a key value.
+
+**App configuration feature flags**
+
+Azure App Configuration is designed to be a centralized repository for feature flags.
+
+Each feature flag has two parts: a name and a list of one or more filters that are used to evaluate if a feature's state is on (that is, when its value is `True`).
+
+A filter defines a use case for when a feature should be turned on. When a feature flag has multiple filters, the filter list is traversed in order until one of the filters determines the feature should be enabled.
+
+The feature manager supports `appsettings.json` as a configuration source for feature flags. The following example shows how to set up feature flags in a JSON file:
+
+```JSON
+"FeatureManagement": {
+    "FeatureA": true, // Feature flag set to on
+    "FeatureB": false, // Feature flag set to off
+    "FeatureC": {
+        "EnabledFor": [
+            {
+                "Name": "Percentage",
+                "Parameters": {
+                    "Value": 50
+                }
+            }
+        ]
+    }
+}
+```
+
+**Enable customer-managed key capability**
+
+The following components are required to successfully enable the customer-managed key capability for Azure App Configuration:
+
+- Standard tier Azure App Configuration instance
+- Azure Key Vault with soft-delete and purge-protection features enabled
+- An RSA or RSA-HSM key within the Key Vault: The key must not be expired, it must be enabled, and it must have both wrap and unwrap capabilities enabled
+
+Once these resources are configured, two steps remain to allow Azure App Configuration to use the Key Vault key:
+
+1. Assign a managed identity to the Azure App Configuration instance
+2. Grant the identity GET, WRAP, and UNWRAP permissions in the target Key Vault's access policy.
+
+You can use private endpoints for Azure App Configuration to allow clients on a virtual network to securely access data over a private link.
+
+**Managed identities**
+
+A managed identity from Microsoft Entra ID allows Azure App Configuration to easily access other Microsoft Entra ID-protected resources, such as Azure Key Vault.
+
+Add a system-assigned identity:
+
+```
+az appconfig identity assign \
+    --name myTestAppConfigStore \
+    --resource-group myResourceGroup
+```
+
+Add a user-assigned identity:
+
+```
+az identity create \
+    --resource-group myResourceGroup \
+    --name myUserAssignedIdentity
+
+az appconfig identity assign \
+    --name myTestAppConfigStore \
+    --resource-group myResourceGroup \
+    --identities /subscriptions/[subscription id]/resourcegroups/myResourceGroup/providers/Microsoft.ManagedIdentity/userAssignedIdentities/myUserAssignedIdentity
+```
+
+Create an Azure App Configuration resource:
+
+```
+az appconfig create \
+    --location $location \
+    --name $appConfigName \
+    --resource-group $resourceGroup \
+    --disable-local-auth true
+```
+
+To retrieve configuration information, you need to assign your Microsoft Entra user to the App Configuration Data Reader role.
+
+```
+userPrincipal=$(az rest \
+    --method GET \
+    --url https://graph.microsoft.com/v1.0/me \
+    --headers 'Content-Type=application/json' \
+    --query userPrincipalName --output tsv)
+
+resourceID=$(az appconfig show \
+    --resource-group $resourceGroup \
+    --name $appConfigName \
+    --query id \
+    --output tsv)
+
+az role assignment create \
+    --assignee $userPrincipal \
+    --role "App Configuration Data Reader" \
+    --scope $resourceID
+```
+
+Store a string:
+
+```
+az appconfig kv set \
+    --name $appConfigName \
+    --key Dev:conStr \
+    --value connectionString
+```
