@@ -2191,3 +2191,198 @@ az appconfig kv set \
     --key Dev:conStr \
     --value connectionString
 ```
+
+### API Management
+
+Azure API Management is made up of an _API gateway_, a _management plane_, and a _developer portal_.
+
+**Products**
+
+Products are how APIs are surfaced to developers. Products in API Management have one or more APIs, and are configured with a title, description, and terms of use. Products can be **Open** or **Protected**.
+
+**API gateways**
+
+An API gateway sits between clients and services. It acts as a reverse proxy, routing requests from clients to services. It might also perform various cross-cutting tasks such as authentication, SSL termination, and rate limiting.
+
+API gateways can be **Managed** or **Self-hosted**.
+
+**API Management policies**
+
+In Azure API Management, policies allow the publisher to change the behavior of the API through configuration. A policy can apply changes to both the inbound request and outbound response.
+
+The policy definition is a simple XML document that describes a sequence of inbound and outbound statements. A policy can be configured at the global level and a particular API level.
+
+The configuration is divided into `inbound`, `backend`, `outbound`, and `on-error`.
+
+```XML
+<policies>
+  <inbound>
+    <!-- statements to be applied to the request go here -->
+  </inbound>
+  <backend>
+    <!-- statements to be applied before the request is forwarded to
+         the backend service go here -->
+  </backend>
+  <outbound>
+    <!-- statements to be applied to the response go here -->
+  </outbound>
+  <on-error>
+    <!-- statements to be applied if there is an error condition go here -->
+    <!-- can review the error by using the context.LastError property -->
+  </on-error>
+</policies>
+```
+
+A policy expression is either:
+
+- a single C# statement enclosed in `@(expression)`, or
+- a multi-statement C# code block, enclosed in `@{expression}`, that returns a value
+
+The following example uses policy expressions and the set-header policy to add user data to the incoming request.
+
+```XML
+<policies>
+    <inbound>
+        <base />
+        <set-header name="x-request-context-data" exists-action="override">
+            <value>@(context.User.Id)</value>
+            <value>@(context.Deployment.Region)</value>
+      </set-header>
+    </inbound>
+</policies>
+```
+
+**Advanced policies**
+
+- Control flow
+  - Conditionally applies policy statements based on the results of the evaluation of Boolean expressions.
+
+```XML
+<choose>
+    <when condition="Boolean expression | Boolean constant">
+        <!— one or more policy statements to be applied if the above condition is true  -->
+    </when>
+    <when condition="Boolean expression | Boolean constant">
+        <!— one or more policy statements to be applied if the above condition is true  -->
+    </when>
+    <otherwise>
+        <!— one or more policy statements to be applied if none of the above conditions are true  -->
+    </otherwise>
+</choose>
+```
+
+- Forward request
+  - Forwards the request to the backend service.
+  - Removing this policy results in the request not being forwarded to the backend service.
+
+```XML
+<forward-request timeout="time in seconds" follow-redirects="true | false"/>
+```
+
+- Limit concurrency
+  - Prevents enclosed policies from executing by more than the specified number of requests at a time.
+
+```XML
+<limit-concurrency key="expression" max-count="number">
+    <!— nested policy statements -->
+</limit-concurrency>
+```
+
+- Log to Event Hubs
+  - Sends messages in the specified format to an event hub defined by a Logger entity.
+
+```XML
+<log-to-eventhub logger-id="id of the logger entity" partition-id="index of the partition where messages are sent" partition-key="value used for partition assignment">
+  Expression returning a string to be logged
+</log-to-eventhub>
+```
+
+- Mock response
+  - Aborts pipeline execution and returns a mocked response directly to the caller.
+
+```XML
+<mock-response status-code="code" content-type="media type"/>
+```
+
+- Retry
+  - Retries execution of the enclosed policy statements, if and until the condition is met. Execution repeats at the specified time intervals and up to the specified retry count.
+
+```XML
+<retry
+    condition="boolean expression or literal"
+    count="number of retry attempts"
+    interval="retry interval in seconds"
+    max-interval="maximum retry interval in seconds"
+    delta="retry interval delta in seconds"
+    first-fast-retry="boolean expression or literal">
+        <!-- One or more child policies. No restrictions -->
+</retry>
+```
+
+- Return response
+  - The `return-response` policy aborts pipeline execution and returns either a default or custom response to the caller.
+
+```XML
+<return-response response-variable-name="existing context variable">
+  <set-header/>
+  <set-body/>
+  <set-status/>
+</return-response>
+```
+
+**API subscription keys**
+
+Keys can be passed in the request header, or as a query string in the URL.
+
+The default header name is `Ocp-Apim-Subscription-Key`, and the default query string is `subscription-key`.
+
+**Using certificates**
+
+Certificates can be used to provide Transport Layer Security (TLS) mutual authentication between the client and the API gateway.
+
+With TLS client authentication, the API Management gateway can inspect the certificate contained within the client request and check for properties like:
+
+- Certificate Authority (CA)
+  - Only allow certificates signed by a particular CA
+- Thumbprint
+  - Allow certificates containing a specified thumbprint
+- Subject
+  - Only allow certificates with a specified subject
+- Expiration Date
+  - Don't allow expired certificates
+
+Check the thumbprint of a client certificate
+
+```XML
+<choose>
+    <when condition="@(context.Request.Certificate == null || context.Request.Certificate.Thumbprint != "desired-thumbprint")" >
+        <return-response>
+            <set-status code="403" reason="Invalid client certificate" />
+        </return-response>
+    </when>
+</choose>
+```
+
+Check the thumbprint against certificates uploaded to API Management
+
+```XML
+<choose>
+    <when condition="@(context.Request.Certificate == null || !context.Request.Certificate.Verify()  || !context.Deployment.Certificates.Any(c => c.Value.Thumbprint == context.Request.Certificate.Thumbprint))" >
+        <return-response>
+            <set-status code="403" reason="Invalid client certificate" />
+        </return-response>
+    </when>
+</choose>
+```
+
+Check the issuer and subject of a client certificate
+
+```XML
+<choose>
+    <when condition="@(context.Request.Certificate == null || context.Request.Certificate.Issuer != "trusted-issuer" || context.Request.Certificate.SubjectName.Name != "expected-subject-name")" >
+        <return-response>
+            <set-status code="403" reason="Invalid client certificate" />
+        </return-response>
+    </when>
+</choose>
+```
