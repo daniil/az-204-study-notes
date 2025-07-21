@@ -2386,3 +2386,440 @@ Check the issuer and subject of a client certificate
     </when>
 </choose>
 ```
+
+**Create an APIM instance**
+
+```
+az apim create \
+    -n $myApiName \
+    --location $myLocation \
+    --publisher-email $myEmail  \
+    --resource-group myResourceGroup \
+    --publisher-name Import-API-Exercise \
+    --sku-name Consumption
+```
+
+### Azure Event Grid
+
+Azure Event Grid is a highly scalable, fully managed Pub Sub message distribution service that offers flexible message consumption patterns using the Hypertext Transfer Protocol (HTTP) and Message Queuing Telemetry Transport (MQTT) protocols.
+
+Event Grid can be configured to send events to subscribers (push delivery) or subscribers can connect to Event Grid to read events (pull delivery).
+
+Event Grid conforms to Cloud Native Computing Foundation’s open standard CloudEvents 1.0 specification using the HTTP protocol binding with JSON format. It means that your solutions publish and consume event messages using a format like the following example:
+
+```JSON
+{
+    "specversion" : "1.0",
+    "type" : "com.yourcompany.order.created",
+    "source" : "https://yourcompany.com/orders/",
+    "subject" : "O-28964",
+    "id" : "A234-1234-1234",
+    "time" : "2018-04-05T17:31:00Z",
+    "comexampleextension1" : "value",
+    "comexampleothervalue" : 5,
+    "datacontenttype" : "application/json",
+    "data" : {
+       "orderId" : "O-28964",
+       "URL" : "https://com.yourcompany/orders/O-28964"
+    }
+}
+```
+
+**Topics**
+
+To respond to certain types of events, subscribers (an Azure service or other applications) decide which topics to subscribe to. There are several kinds of topics: custom topics, system topics, and partner topics.
+
+- **System topics** are built-in topics provided by Azure services.
+- **Custom topics** are application and third-party topics. When you create or are assigned access to a custom topic, you see that custom topic in your subscription.
+- **Partner topics** are a kind of topic used to subscribe to events published by a partner. The feature that enables this type of integration is called Partner Events.
+
+**Event schemas**
+
+Azure Event Grid supports two types of event schemas: Event Grid event schema and Cloud event schema. Events consist of a set of four required string properties.
+
+When posting events to an Event Grid topic, the array can have a total size of up to 1 MB. Each event in the array is limited to 1 MB. If an event or the array is greater than the size limits, you receive the response `413 Payload Too Large`. Operations are charged in 64 KB increments.
+
+The following example shows the properties that are used by all event publishers:
+
+```JSON
+[
+  {
+    "topic": string,
+    "subject": string,
+    "id": string,
+    "eventType": string,
+    "eventTime": string,
+    "data":{
+      object-unique-to-each-publisher
+    },
+    "dataVersion": string,
+    "metadataVersion": string
+  }
+]
+```
+
+In addition to its default event schema, Azure Event Grid natively supports events in the JSON implementation of CloudEvents v1.0 and HTTP protocol binding. CloudEvents is an open specification for describing event data.
+
+Here's an example of an Azure Blob Storage event in CloudEvents format:
+
+```JSON
+{
+    "specversion": "1.0",
+    "type": "Microsoft.Storage.BlobCreated",
+    "source": "/subscriptions/{subscription-id}/resourceGroups/{resource-group}/providers/Microsoft.Storage/storageAccounts/{storage-account}",
+    "id": "9aeb0fdf-c01e-0131-0922-9eb54906e209",
+    "time": "2019-11-18T15:13:39.4589254Z",
+    "subject": "blobServices/default/containers/{storage-container}/blobs/{new-file}",
+    "dataschema": "#",
+    "data": {
+        "api": "PutBlockList",
+        "clientRequestId": "4c5dd7fb-2c48-4a27-bb30-5361b5de920a",
+        "requestId": "9aeb0fdf-c01e-0131-0922-9eb549000000",
+        "eTag": "0x8D76C39E4407333",
+        "contentType": "image/png",
+        "contentLength": 30699,
+        "blobType": "BlockBlob",
+        "url": "https://gridtesting.blob.core.windows.net/testcontainer/{new-file}",
+        "sequencer": "000000000000000000000000000099240000000000c41c18",
+        "storageDiagnostics": {
+            "batchId": "681fe319-3006-00a8-0022-9e7cde000000"
+        }
+    }
+}
+```
+
+The headers values for events delivered in the CloudEvents schema and the Event Grid schema are the same except for content-type. For CloudEvents schema, that header value is `"content-type":"application/cloudevents+json; charset=utf-8"`. For Event Grid schema, that header value is `"content-type":"application/json; charset=utf-8"`.
+
+**Event delivery durability**
+
+Event Grid provides durable delivery. It tries to deliver each event at least once for each matching subscription immediately. If a subscriber's endpoint doesn't acknowledge receipt of an event or if there's a failure, Event Grid retries delivery based on a fixed retry schedule and retry policy. By default, Event Grid delivers one event at a time to the subscriber, and the payload is an array with a single event. Event Grid doesn't guarantee order for event delivery, so subscribers might receive them out of order.
+
+**Retry policy**
+
+You can customize the retry policy when creating an event subscription by using the following two configurations. An event is dropped if either of the limits of the retry policy is reached.
+
+- **Maximum number of attempts**
+  - The value must be an integer between 1 and 30.
+  - The default value is 30.
+- **Event time-to-live (TTL)**
+  - The value must be an integer between 1 and 1440.
+  - The default value is 1440 minutes
+
+```
+az eventgrid event-subscription create \
+  -g gridResourceGroup \
+  --topic-name <topic_name> \
+  --name <event_subscription_name> \
+  --endpoint <endpoint_URL> \
+  --max-delivery-attempts 18
+```
+
+**Output batching**
+
+You can configure Event Grid to batch events for delivery for improved HTTP performance in high-throughput scenarios.
+
+Batched delivery has two settings:
+
+- Max events per batch
+- Preferred batch size in kilobytes
+
+**Dead-letter events**
+
+When Event Grid can't deliver an event within a certain time period or after trying to deliver the event a specific number of times, it can send the undelivered event to a storage account.
+
+Event Grid dead-letters an event when one of the following conditions is met.
+
+- Event isn't delivered within the **time-to-live** period.
+- The **number of tries** to deliver the event exceeds the limit.
+
+**Filter events**
+
+When creating an event subscription, you have three options for filtering:
+
+- Event types
+- Subject begins with or ends with
+- Advanced fields and operators
+
+The JSON syntax for filtering by event type is:
+
+```JSON
+"filter": {
+  "includedEventTypes": [
+    "Microsoft.Resources.ResourceWriteFailure",
+    "Microsoft.Resources.ResourceWriteSuccess"
+  ]
+}
+```
+
+The JSON syntax for filtering by subject is:
+
+```JSON
+"filter": {
+  "subjectBeginsWith": "/blobServices/default/containers/mycontainer/log",
+  "subjectEndsWith": ".jpg"
+}
+```
+
+In advanced filtering, you specify the:
+
+- operator type
+  - The type of comparison.
+- key
+  - The field in the event data that you're using for filtering. It can be a number, boolean, or string.
+- value or values
+  - The value or values to compare to the key.
+
+The JSON syntax for using advanced filters is:
+
+```JSON
+"filter": {
+  "advancedFilters": [
+    {
+      "operatorType": "NumberGreaterThanOrEquals",
+      "key": "Data.Key1",
+      "value": 5
+    },
+    {
+      "operatorType": "StringContains",
+      "key": "Subject",
+      "values": ["container1", "container2"]
+    }
+  ]
+}
+```
+
+Register the Event Grid resource provider:
+
+```
+az provider register --namespace Microsoft.EventGrid
+```
+
+You can check the status of registration with the following command:
+
+```
+az provider show --namespace Microsoft.EventGrid --query "registrationState"
+```
+
+Create a topic:
+
+```
+az eventgrid topic create \
+    --name $topicName \
+    --location $location \
+    --resource-group $resourceGroup
+```
+
+Subscribe to a topic:
+
+```
+endpoint="${siteURL}/api/updates"
+topicId=$(az eventgrid topic show --resource-group $resourceGroup \
+    --name $topicName --query "id" --output tsv)
+
+az eventgrid event-subscription create \
+    --source-resource-id $topicId \
+    --name TopicSubscription \
+    --endpoint $endpoint
+```
+
+Retrieve the URL (TOPIC_ENDPOINT) and access key (TOPIC_ACCESS_KEY) for the topic you created:
+
+```
+az eventgrid topic show --name $topicName -g $resourceGroup --query "endpoint" --output tsv
+az eventgrid topic key list --name $topicName -g $resourceGroup --query "key1" --output tsv
+```
+
+### Azure Event Hubs
+
+Azure Event Hubs is a native data-streaming service in the cloud that can stream millions of events per second, with low latency, from any source to any destination. Event Hubs is compatible with Apache Kafka (without any code changes).
+
+Event Hubs is a multi-protocol event streaming engine that natively supports Advanced Message Queuing Protocol (AMQP), Apache Kafka, and HTTPS protocols.
+
+**Event Hubs Capture**
+
+Azure Event Hubs enables you to automatically capture the streaming data in Event Hubs in an Azure Blob storage or Azure Data Lake Storage account.
+
+Event Hubs is a time-retention durable buffer for telemetry ingress, similar to a distributed log. The key to scaling in Event Hubs is the partitioned consumer model. Each partition is an independent segment of data and is consumed independently.
+
+Captured data is written in _Apache Avro_ format.
+
+The storage naming convention is as follows:
+
+```
+{Namespace}/{EventHub}/{PartitionId}/{Year}/{Month}/{Day}/{Hour}/{Minute}/{Second}
+```
+
+**Event processor**
+
+The Azure Event Hubs SDKs provide distributed environment functionality (Scale, Load balance, Seamless resume on failures, Consume events). In .NET or Java SDKs, you use an event processor client (`EventProcessorClient`), and in Python and JavaScript SDKs, you use `EventHubConsumerClient`.
+
+**Control access**
+
+Azure Event Hubs supports both Microsoft Entra ID and shared access signatures (SAS) to handle both authentication and authorization. Azure provides the following Azure built-in roles for authorizing access to Event Hubs data using Microsoft Entra ID and OAuth:
+
+- **Azure Event Hubs Data Owner**: Use this role to give complete access to Event Hubs resources.
+- **Azure Event Hubs Data Sender**: Use this role to give send access to Event Hubs resources.
+- **Azure Event Hubs Data Receiver**: Use this role to give receiving access to Event Hubs resources.
+
+**Common operations with the Event Hubs client library**
+
+Inspect event Hubs
+
+```C#
+var connectionString = "<< CONNECTION STRING FOR THE EVENT HUBS NAMESPACE >>";
+var eventHubName = "<< NAME OF THE EVENT HUB >>";
+
+await using (var producer = new EventHubProducerClient(connectionString, eventHubName))
+{
+    string[] partitionIds = await producer.GetPartitionIdsAsync();
+}
+```
+
+Publish events to Event Hubs
+
+```C#
+var connectionString = "<< CONNECTION STRING FOR THE EVENT HUBS NAMESPACE >>";
+var eventHubName = "<< NAME OF THE EVENT HUB >>";
+
+await using (var producer = new EventHubProducerClient(connectionString, eventHubName))
+{
+    using EventDataBatch eventBatch = await producer.CreateBatchAsync();
+    eventBatch.TryAdd(new EventData(new BinaryData("First")));
+    eventBatch.TryAdd(new EventData(new BinaryData("Second")));
+
+    await producer.SendAsync(eventBatch);
+}
+```
+
+Read events from an Event Hubs
+
+```C#
+var connectionString = "<< CONNECTION STRING FOR THE EVENT HUBS NAMESPACE >>";
+var eventHubName = "<< NAME OF THE EVENT HUB >>";
+
+string consumerGroup = EventHubConsumerClient.DefaultConsumerGroupName;
+
+await using (var consumer = new EventHubConsumerClient(consumerGroup, connectionString, eventHubName))
+{
+    using var cancellationSource = new CancellationTokenSource();
+    cancellationSource.CancelAfter(TimeSpan.FromSeconds(45));
+
+    await foreach (PartitionEvent receivedEvent in consumer.ReadEventsAsync(cancellationSource.Token))
+    {
+        // At this point, the loop will wait for events to be available in the Event Hub. When an event
+        // is available, the loop will iterate with the event that was received. Because we did not
+        // specify a maximum wait time, the loop will wait forever unless cancellation is requested using
+        // the cancellation token.
+    }
+}
+```
+
+Read events from an Event Hubs partition
+
+```C#
+var connectionString = "<< CONNECTION STRING FOR THE EVENT HUBS NAMESPACE >>";
+var eventHubName = "<< NAME OF THE EVENT HUB >>";
+
+string consumerGroup = EventHubConsumerClient.DefaultConsumerGroupName;
+
+await using (var consumer = new EventHubConsumerClient(consumerGroup, connectionString, eventHubName))
+{
+    EventPosition startingPosition = EventPosition.Earliest;
+    string partitionId = (await consumer.GetPartitionIdsAsync()).First();
+
+    using var cancellationSource = new CancellationTokenSource();
+    cancellationSource.CancelAfter(TimeSpan.FromSeconds(45));
+
+    await foreach (PartitionEvent receivedEvent in consumer.ReadEventsFromPartitionAsync(partitionId, startingPosition, cancellationSource.Token))
+    {
+        // At this point, the loop will wait for events to be available in the partition. When an event
+        // is available, the loop will iterate with the event that was received. Because we did not
+        // specify a maximum wait time, the loop will wait forever unless cancellation is requested using
+        // the cancellation token.
+    }
+}
+```
+
+Process events using an Event Processor client
+
+For most production scenarios, the recommendation is to use `EventProcessorClient` for reading and processing events. Since the `EventProcessorClient` has a dependency on Azure Storage blobs for persistence of its state, you need to provide a `BlobContainerClient` for the processor, which has been configured for the storage account and container that should be used.
+
+```C#
+var cancellationSource = new CancellationTokenSource();
+cancellationSource.CancelAfter(TimeSpan.FromSeconds(45));
+
+var storageConnectionString = "<< CONNECTION STRING FOR THE STORAGE ACCOUNT >>";
+var blobContainerName = "<< NAME OF THE BLOB CONTAINER >>";
+
+var eventHubsConnectionString = "<< CONNECTION STRING FOR THE EVENT HUBS NAMESPACE >>";
+var eventHubName = "<< NAME OF THE EVENT HUB >>";
+var consumerGroup = "<< NAME OF THE EVENT HUB CONSUMER GROUP >>";
+
+Task processEventHandler(ProcessEventArgs eventArgs) => Task.CompletedTask;
+Task processErrorHandler(ProcessErrorEventArgs eventArgs) => Task.CompletedTask;
+
+var storageClient = new BlobContainerClient(storageConnectionString, blobContainerName);
+var processor = new EventProcessorClient(storageClient, consumerGroup, eventHubsConnectionString, eventHubName);
+
+processor.ProcessEventAsync += processEventHandler;
+processor.ProcessErrorAsync += processErrorHandler;
+
+await processor.StartProcessingAsync();
+
+try
+{
+    // The processor performs its work in the background; block until cancellation
+    // to allow processing to take place.
+
+    await Task.Delay(Timeout.Infinite, cancellationSource.Token);
+}
+catch (TaskCanceledException)
+{
+    // This is expected when the delay is canceled.
+}
+
+try
+{
+    await processor.StopProcessingAsync();
+}
+finally
+{
+    // To prevent leaks, the handlers should be removed when processing is complete.
+
+    processor.ProcessEventAsync -= processEventHandler;
+    processor.ProcessErrorAsync -= processErrorHandler;
+}
+```
+
+Create an Event Hubs namespace:
+
+> An Azure Event Hubs namespace is a logical container for event hub resources within Azure. It provides a unique scoping container where you can create one or more event hubs, which are used to ingest, process, and store large volumes of event data.
+
+```
+az eventhubs namespace create --name $namespaceName --resource-group $resourceGroup -l $location
+```
+
+Create an event hub:
+
+```
+az eventhubs eventhub create --name myEventHub --resource-group $resourceGroup \
+  --namespace-name $namespaceName
+```
+
+Assign your Microsoft Entra user to the **Azure Service Bus Data Owner** role at the Service Bus namespace level.
+
+```
+# Retrieve user principal
+userPrincipal=$(az rest --method GET --url https://graph.microsoft.com/v1.0/me \
+    --headers 'Content-Type=application/json' \
+    --query userPrincipalName --output tsv)
+
+# Retrieve the resource ID of the Service Bus namespace
+resourceID=$(az eventhubs namespace show --resource-group $resourceGroup \
+    --name $namespaceName --query id --output tsv)
+
+# Create and assign the Azure Event Hubs Data Owner role
+az role assignment create --assignee $userPrincipal \
+    --role "Azure Event Hubs Data Owner" \
+    --scope $resourceID
+```
