@@ -2823,3 +2823,212 @@ az role assignment create --assignee $userPrincipal \
     --role "Azure Event Hubs Data Owner" \
     --scope $resourceID
 ```
+
+### Message Based Solutions
+
+**Service Bus queues**
+
+- Your solution needs to receive messages without having to poll the queue. With Service Bus, you can achieve it by using a long-polling receive operation using the TCP-based protocols that Service Bus supports.
+- Your solution requires the queue to provide a guaranteed first-in-first-out (FIFO) ordered delivery.
+- Your solution needs to support automatic duplicate detection.
+- You want your application to process messages as parallel long-running streams (messages are associated with a stream using the session ID property on the message). In this model, each node in the consuming application competes for streams, as opposed to messages. When a stream is given to a consuming node, the node can examine the state of the application stream state using transactions.
+- Your solution requires transactional behavior and atomicity when sending or receiving multiple messages from a queue.
+- Your application handles messages that can exceed 64 KB but won't likely approach the 256 KB or 1-MB limit, depending on the chosen service tier (although Service Bus queues can handle messages up to 100 MB).
+- You deal with a requirement to provide a role-based access model to the queues, and different rights/permissions for senders and receivers.
+
+\*\* Storage queues
+
+- Your application must store over 80 gigabytes of messages in a queue.
+- Your application wants to track progress for processing a message in the queue. It's useful if the worker processing a message crashes. Another worker can then use that information to continue from where the prior worker left off.
+- You require server side logs of all of the transactions executed against your queues.
+
+### Azure Service Bus
+
+Azure Service Bus is a fully managed enterprise message broker with message queues and publish-subscribe topics.
+
+The primary wire protocol for Service Bus is Advanced Messaging Queueing Protocol (AMQP) 1.0, an open ISO/IEC standard.
+
+Some common messaging scenarios are:
+
+- _Messaging_. Transfer business data, such as sales or purchase orders, journals, or inventory movements.
+- _Decouple applications_. Improve reliability and scalability of applications and services. Client and service don't have to be online at the same time.
+- _Topics and subscriptions_. Enable 1:n relationships between publishers and subscribers.
+- _Message sessions_. Implement workflows that require message ordering or message deferral.
+
+The messaging entities that form the core of the messaging capabilities in Service Bus are **queues**, **topics and subscriptions**, and **rules/actions**.
+
+**Queues**
+
+You can specify two different modes in which Service Bus receives messages:
+
+- **Receive and delete**
+  - In this mode, when Service Bus receives the request from the consumer, it marks the message as consumed and returns it to the consumer application.
+  - This mode is the simplest model. It works best for scenarios in which the application can tolerate not processing a message if a failure occurs.
+- **Peek lock**.
+  - In this mode, the receive operation becomes two-stage, which makes it possible to support applications that can't tolerate missing messages.
+  - Finds the next message to be consumed, locks it to prevent other consumers from receiving it, and then, return the message to the application.
+  - After the application finishes processing the message, it requests the Service Bus service to complete the second stage of the receive process. Then, the service marks the message as consumed.
+
+**Topics and subscriptions**
+
+A queue allows processing of a message by a single consumer. In contrast to queues, topics and subscriptions provide a one-to-many form of communication in a **publish and subscribe** pattern.
+
+**Message payloads and serialization**
+
+Messages carry a payload and metadata. The metadata is in the form of key-value pair properties, and describes the payload, and gives handling instructions to Service Bus and applications.
+
+A Service Bus message consists of a binary payload section that Service Bus never handles in any form on the service-side, and two sets of properties.
+
+- The broker properties are system defined.
+  - A subset of the broker properties, specifically `To`, `ReplyTo`, `ReplyToSessionId`, `MessageId`, `CorrelationId`, and `SessionId`, help applications route messages to particular destinations.
+- The user properties are a collection of key-value pairs defined and set by the application.
+
+Create an Azure Service Bus namespace and queue
+
+```
+az servicebus namespace create \
+    --resource-group $resourceGroup \
+    --name $namespaceName \
+    --location $location
+
+az servicebus queue create \
+    --resource-group $resourceGroup \
+    --namespace-name $namespaceName \
+    --name myqueue
+```
+
+To allow your app to send and receive messages, assign your Microsoft Entra user to the **Azure Service Bus Data Owner** role at the Service Bus namespace level.
+
+```
+az role assignment create \
+    --assignee $userPrincipal \
+    --role "Azure Service Bus Data Owner" \
+    --scope $resourceID
+```
+
+### Azure Queue Storage
+
+Azure Queue Storage is a service for storing large numbers of messages. You access messages from anywhere in the world via authenticated calls using HTTP or HTTPS. A queue message can be up to 64 KB in size.
+
+Create the Queue service client
+
+```C#
+// Get the connection string from app settings
+string connectionString = ConfigurationManager.AppSettings["StorageConnectionString"];
+
+// Instantiate a QueueClient which will be used to create and manipulate the queue
+QueueClient queueClient = new QueueClient(connectionString, queueName);
+```
+
+Create a queue
+
+```C#
+// Create the queue
+queueClient.CreateIfNotExists();
+```
+
+Insert a message into a queue
+
+A message can be either a string (in UTF-8 format) or a byte array.
+
+```C#
+if (queueClient.Exists())
+{
+    // Send a message to the queue
+    queueClient.SendMessage(message);
+}
+```
+
+Peek at the next message
+
+If you don't pass a value for the `maxMessages` parameter, the default is to peek at one message.
+
+```C#
+if (queueClient.Exists())
+{
+    // Peek at the next message
+    PeekedMessage[] peekedMessage = queueClient.PeekMessages();
+}
+```
+
+Change the contents of a queued message
+
+```C#
+if (queueClient.Exists())
+{
+    // Get the message from the queue
+    QueueMessage[] message = queueClient.ReceiveMessages();
+
+    // Update the message contents
+    queueClient.UpdateMessage(
+        message[0].MessageId,
+        message[0].PopReceipt,
+        "Updated contents",
+        TimeSpan.FromSeconds(60.0)  // Make it invisible for another 60 seconds
+    );
+}
+```
+
+Dequeue the next message
+
+When you call `ReceiveMessages`, you get the next message in a queue. A message returned from `ReceiveMessages` becomes invisible to any other code reading messages from this queue. By default, this message stays invisible for 30 seconds. To finish removing the message from the queue, you must also call `DeleteMessage`.
+
+```C#
+if (queueClient.Exists())
+{
+    // Get the next message
+    QueueMessage[] retrievedMessage = queueClient.ReceiveMessages();
+
+    // Process (i.e. print) the message in less than 30 seconds
+    Console.WriteLine($"Dequeued message: '{retrievedMessage[0].Body}'");
+
+    // Delete the message
+    queueClient.DeleteMessage(retrievedMessage[0].MessageId, retrievedMessage[0].PopReceipt);
+}
+```
+
+Get the queue length
+
+The `ApproximateMessagesCount` property contains the approximate number of messages in the queue. This number isn't lower than the actual number of messages in the queue, but could be higher.
+
+```C#
+if (queueClient.Exists())
+{
+    QueueProperties properties = queueClient.GetProperties();
+
+    // Retrieve the cached approximate message count.
+    int cachedMessagesCount = properties.ApproximateMessagesCount;
+
+    // Display number of messages.
+    Console.WriteLine($"Number of messages in queue: {cachedMessagesCount}");
+}
+```
+
+Delete a queue
+
+```C#
+if (queueClient.Exists())
+{
+    // Delete the queue
+    queueClient.Delete();
+}
+```
+
+Create a storage account:
+
+```
+az storage account create \
+    --resource-group $resourceGroup \
+    --name $storAcctName \
+    --location $location \
+    --sku Standard_LRS
+```
+
+Create and assign the **Storage Queue Data Contributor** role.
+
+```
+az role assignment create \
+    --assignee $userPrincipal \
+    --role "Storage Queue Data Contributor" \
+    --scope $resourceID
+```
