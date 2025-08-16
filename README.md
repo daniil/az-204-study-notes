@@ -3032,3 +3032,36 @@ az role assignment create \
     --role "Storage Queue Data Contributor" \
     --scope $resourceID
 ```
+
+### Application Insights
+
+Application Insights is an extension of Azure Monitor and provides Application Performance Monitoring (APM) features. APM tools are useful to monitor applications from development, through test, and into production in the following ways:
+
+- Proactively understand how an application is performing.
+- Reactively review application execution data to determine the cause of an incident.
+
+In addition to collecting metrics and application telemetry data, which describe application activities and health, Application Insights can also be used to collect and store application trace logging data.
+
+**What Application Insights monitors**
+
+- Request rates, response times, and failure rates
+- Dependency rates, response times, and failure rates
+- Exceptions
+- Page views and load performance
+- AJAX calls from web pages
+- User and session counts.
+- Performance counters from your Windows or Linux server machines, such as CPU, memory, and network usage.
+- Host diagnostics from Docker or Azure.
+- Diagnostic trace logs from your app
+- Custom events and metrics that you write yourself in the client or server code, to track business events such as items sold or games won.
+
+**Log-based metrics**
+
+There are two kinds of metrics:
+
+- Log-based metrics behind the scene are translated into Kusto queries from stored events.
+- Standard metrics are stored as preaggregated time series.
+
+Since _standard metrics_ are preaggregated during collection, they have better performance at query time. Standard metrics are a better choice for dashboarding and in real-time alerting. The _log-based metrics_ have more dimensions, which makes them the superior option for data analysis and ad-hoc diagnostics.
+
+The preaggregated metrics aren't stored as individual events with lots of properties. Instead, they're stored as preaggregated time series, and only with key dimensions. This feature makes the new metrics superior at query time: retrieving data happens faster and requires less compute power. It also enables new scenarios such as near real-time alerting on dimensions of metrics, more responsive dashboards, and more.
